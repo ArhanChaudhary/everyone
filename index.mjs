@@ -1,21 +1,13 @@
 import { Octokit } from "@octokit/core";
 
-const minFollowers = 1000;
+const minFollowers = 500;
 // const coAuthorsNum = 10;
 
 const octokit = new Octokit({
   auth: process.env.GH_PAT,
 });
 
-let { data: users } = await octokit.request("GET /users", {
-  q: "followers:>=" + minFollowers,
-  ref: "searchresults",
-  s: "followers",
-  type: "Users",
-});
-
-async function getFormattedUserInfo(user) {
-  // return Promise.resolve("hello " + username);
+async function userInfo(user) {
   let username = user.login;
   let { data: userRepos } = await octokit.request(
     `GET /users/{username}/repos`,
@@ -25,7 +17,7 @@ async function getFormattedUserInfo(user) {
   );
   let targetRepo = userRepos.find(({ fork }) => !fork);
   if (!targetRepo) {
-    return Promise.reject();
+    return Promise.reject(username + ": No target repo found");
   }
   let { data: allCommits } = await octokit.request(
     `GET /repos/{owner}/{repo}/commits`,
@@ -36,21 +28,45 @@ async function getFormattedUserInfo(user) {
   );
   let targetCommit = allCommits.find(({ author }) => author.login === username);
   if (!targetCommit) {
-    return Promise.reject();
+    return Promise.reject(username + ": No target commit found");
   }
   let email = targetCommit.commit.author.email;
   if (!email || email.includes("noreply.github.com")) {
-    return Promise.reject();
+    return Promise.reject(username + ": No email found");
   }
   return `${username} <${email}>`;
 }
 
-let allCoAuthors = await Promise.allSettled(users.map(getFormattedUserInfo));
+async function pageUserInfo(page) {
+  let {
+    data: { items: users },
+  } = await octokit.request("GET /search/users", {
+    q: "followers:>=" + minFollowers,
+    ref: "searchresults",
+    s: "followers",
+    type: "Users",
+    per_page: 100,
+    page,
+  });
 
-allCoAuthors = allCoAuthors
-  .filter(({ status }) => status === "fulfilled")
-  .map(({ value }) => "Co-authored-by: " + value);
+  let allCoAuthors = await Promise.allSettled(users.map(userInfo));
+  return Promise.resolve(
+    allCoAuthors
+      .filter(
+        ({ status, reason }) => status === "fulfilled" || console.log(reason)
+      )
+      .map(({ value }) => "Co-authored-by: " + value)
+  );
+}
+
+let pageUsersInfoPromises = [];
+
+for (let i = 1; i <= 5; i++) {
+  pageUsersInfoPromises.push(pageUserInfo(i));
+}
+
+let pagesUserInfo = (await Promise.all(pageUsersInfoPromises)).flat();
 
 console.log("👀");
 console.log();
-console.log(allCoAuthors.join("\n"));
+console.log(pagesUserInfo.join("\n"));
