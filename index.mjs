@@ -67,6 +67,7 @@ async function pageUserInfo(page) {
     per_page: perPage,
     page,
   });
+
   users = users.filter(({ type }) => type === "User");
   let allCoAuthors = await Promise.allSettled(users.map(userInfo));
 
