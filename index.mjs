@@ -1,87 +1,70 @@
 import { Octokit } from "octokit";
 
 const MIN_FOLLOWERS = 500;
-const USERS_PER_PAGE = 100;
-const PAGE_COUNT = 3;
+const NUM_CO_AUTHORS = 10_000;
 
 const octokit = new Octokit({
   auth: process.env.GH_PAT,
 });
 
 async function deriveUserEmail(username) {
-  let { data: userRepos } = await octokit.request(
-    "GET /users/{username}/repos",
-    {
+  let [name, { data: events }] = await Promise.all([
+    octokit
+      .request("GET /users/{username}", {
+        username,
+      })
+      .then(
+        ({ data: { name } }) =>
+          name || Promise.reject(username + ": No name found")
+      ),
+    octokit.request("GET /users/{username}/events/public", {
       username,
-    }
-  );
-  let targetRepo = userRepos
-    .filter(({ fork }) => !fork)
-    .reduce((acc, repo) => {
-      if (repo.stargazers_count > acc.stargazers_count) {
-        return repo;
-      } else {
-        return acc;
-      }
-    });
-  if (!targetRepo) {
-    return Promise.reject(username + ": No target repo found");
-  }
-  let { data: commits } = await octokit.request(
-    "GET /repos/{owner}/{repo}/commits",
-    {
-      owner: username,
-      repo: targetRepo.name,
-      author: username,
-      per_page: 5,
-    }
-  );
-  let emails = commits.map(
-    ({
-      commit: {
-        author: { email },
-      },
-    }) => email
-  );
+      per_page: 10,
+    }),
+  ]);
 
-  let email = emails.find((email) => email);
-  if (!email) {
-    return Promise.reject(username + ": No email found");
-  }
-  return email;
+  let email;
+  JSON.stringify(events, (_, jsObject) => {
+    if (jsObject?.email && jsObject?.name === name)
+      email = jsObject.email;
+    return jsObject;
+  });
+  return email || Promise.reject(username + ": No email found");
 }
 
-async function pageUserInfo(page) {
-  let {
-    data: { items: users },
-  } = await octokit.request("GET /search/users", {
+async function* allCoAuthors() {
+  let usersIterator = octokit.paginate.iterator(octokit.rest.search.users, {
     q: "followers:>=" + MIN_FOLLOWERS,
     sort: "followers",
-    per_page: USERS_PER_PAGE,
-    page,
+    per_page: 100,
   });
 
-  users = users.filter(({ type }) => type === "User");
-  let allCoAuthors = await Promise.allSettled(
-    users.map(
-      async ({ login: username, email }) =>
-        `${username} <${email || (await deriveUserEmail(username))}>`
-    )
-  );
-
-  return allCoAuthors
-    .filter(({ value, reason }) => value || console.error(reason))
-    .map(({ value }) => "Co-authored-by: " + value);
+  for await (const { data: users } of usersIterator) {
+    console.log("NEW PAGE");
+    let someCoAuthors = await Promise.allSettled(
+      users
+        .filter(({ type }) => type === "User")
+        .map(
+          async ({ login: username, email }) =>
+            `${username} <${email || (await deriveUserEmail(username))}>`
+        )
+    );
+    for (let { value: coAuthor, reason } of someCoAuthors) {
+      if (coAuthor) {
+        yield "Co-authored-by: " + coAuthor;
+      } else {
+        console.error(reason);
+      }
+    }
+  }
 }
-
-let pageUsersInfoPromises = [];
-
-for (let i = 1; i <= PAGE_COUNT; i++) {
-  pageUsersInfoPromises.push(pageUserInfo(i));
-}
-
-let pagesUserInfo = (await Promise.all(pageUsersInfoPromises)).flat();
 
 console.log("👀");
 console.log();
-console.log(pagesUserInfo.join("\n"));
+let num_co_authors = NUM_CO_AUTHORS;
+for await (const coAuthor of allCoAuthors()) {
+  if (num_co_authors-- <= 0) {
+    break;
+  }
+  console.log(coAuthor);
+}
