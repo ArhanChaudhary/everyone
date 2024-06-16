@@ -8,11 +8,7 @@ const octokit = new Octokit({
   auth: process.env.GH_PAT,
 });
 
-async function userInfo(user) {
-  let username = user.login;
-  if (user.email) {
-    return `${username} <${email}>`;
-  }
+async function deriveUserEmail(username) {
   let { data: userRepos } = await octokit.request(
     `GET /users/{username}/repos`,
     {
@@ -48,13 +44,11 @@ async function userInfo(user) {
     }) => email
   );
 
-  let email = emails.find(
-    (email) => email && !email.includes("noreply.github.com")
-  );
+  let email = emails.find((email) => email);
   if (!email) {
     return Promise.reject(username + ": No email found");
   }
-  return `${username} <${email}>`;
+  return email;
 }
 
 async function pageUserInfo(page) {
@@ -69,7 +63,14 @@ async function pageUserInfo(page) {
   });
 
   users = users.filter(({ type }) => type === "User");
-  let allCoAuthors = await Promise.allSettled(users.map(userInfo));
+  let allCoAuthors = await Promise.allSettled(
+    users.map(async ({ login: username, email }) => {
+      if (!email) {
+        email = await deriveUserEmail(username);
+      }
+      return `${username} <${email}>`;
+    })
+  );
 
   return allCoAuthors
     .filter(
