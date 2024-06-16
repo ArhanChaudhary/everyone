@@ -1,6 +1,5 @@
 import { Octokit } from "octokit";
 
-const MIN_FOLLOWERS = 500;
 const NUM_CO_AUTHORS = 10_000;
 
 const octokit = new Octokit({
@@ -25,22 +24,21 @@ async function deriveUserEmail(username) {
 
   let email;
   JSON.stringify(events, (_, jsObject) => {
-    if (jsObject?.email && jsObject?.name === name)
-      email = jsObject.email;
+    if (jsObject?.email && jsObject?.name === name) email = jsObject.email;
     return jsObject;
   });
   return email || Promise.reject(username + ": No email found");
 }
 
-async function* allCoAuthors() {
+async function* allCoAuthors(minFollowers) {
   let usersIterator = octokit.paginate.iterator(octokit.rest.search.users, {
-    q: "followers:>=" + MIN_FOLLOWERS,
+    q: `followers:>=${minFollowers}`,
     sort: "followers",
+    order: "desc",
     per_page: 100,
   });
 
-  for await (const { data: users } of usersIterator) {
-    console.log("NEW PAGE");
+  for await (let { data: users } of usersIterator) {
     let someCoAuthors = await Promise.allSettled(
       users
         .filter(({ type }) => type === "User")
@@ -61,10 +59,14 @@ async function* allCoAuthors() {
 
 console.log("👀");
 console.log();
-let num_co_authors = NUM_CO_AUTHORS;
-for await (const coAuthor of allCoAuthors()) {
-  if (num_co_authors-- <= 0) {
-    break;
+let numCoAuthors = NUM_CO_AUTHORS;
+outer: while (true) {
+  let minFollowers = Math.random() * (20_000 - 50) + 50;
+  for await (const coAuthor of allCoAuthors(minFollowers)) {
+    if (numCoAuthors-- <= 0) {
+      break outer;
+    }
+    console.log(coAuthor);
   }
-  console.log(coAuthor);
 }
+console.error("\nDone!\n");
