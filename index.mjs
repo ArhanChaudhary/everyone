@@ -1,8 +1,8 @@
-import { Octokit } from "@octokit/core";
+import { Octokit } from "octokit";
 
-const minFollowers = 500;
-const perPage = 100;
-const pages = 5;
+const MIN_FOLLOWERS = 500;
+const USERS_PER_PAGE = 100;
+const PAGE_COUNT = 3;
 
 const octokit = new Octokit({
   auth: process.env.GH_PAT,
@@ -10,7 +10,7 @@ const octokit = new Octokit({
 
 async function deriveUserEmail(username) {
   let { data: userRepos } = await octokit.request(
-    `GET /users/{username}/repos`,
+    "GET /users/{username}/repos",
     {
       username,
     }
@@ -28,7 +28,7 @@ async function deriveUserEmail(username) {
     return Promise.reject(username + ": No target repo found");
   }
   let { data: commits } = await octokit.request(
-    `GET /repos/{owner}/{repo}/commits`,
+    "GET /repos/{owner}/{repo}/commits",
     {
       owner: username,
       repo: targetRepo.name,
@@ -55,33 +55,28 @@ async function pageUserInfo(page) {
   let {
     data: { items: users },
   } = await octokit.request("GET /search/users", {
-    q: "followers:>=" + minFollowers,
+    q: "followers:>=" + MIN_FOLLOWERS,
     sort: "followers",
-    order: "desc",
-    per_page: perPage,
+    per_page: USERS_PER_PAGE,
     page,
   });
 
   users = users.filter(({ type }) => type === "User");
   let allCoAuthors = await Promise.allSettled(
-    users.map(async ({ login: username, email }) => {
-      if (!email) {
-        email = await deriveUserEmail(username);
-      }
-      return `${username} <${email}>`;
-    })
+    users.map(
+      async ({ login: username, email }) =>
+        `${username} <${email || (await deriveUserEmail(username))}>`
+    )
   );
 
   return allCoAuthors
-    .filter(
-      ({ status, reason }) => status === "fulfilled" || console.log(reason)
-    )
+    .filter(({ value, reason }) => value || console.error(reason))
     .map(({ value }) => "Co-authored-by: " + value);
 }
 
 let pageUsersInfoPromises = [];
 
-for (let i = 1; i <= pages; i++) {
+for (let i = 1; i <= PAGE_COUNT; i++) {
   pageUsersInfoPromises.push(pageUserInfo(i));
 }
 
