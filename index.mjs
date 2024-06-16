@@ -6,6 +6,28 @@ const FOLLOWERS_END = 4000;
 
 const octokit = new Octokit({
   auth: process.env.GH_PAT,
+  throttle: {
+    onRateLimit: (retryAfter, options, octokit) => {
+      octokit.log.warn(
+        `Request quota exhausted for request ${options.method} ${options.url}`
+      );
+
+      if (options.request.retryCount === 0) {
+        octokit.log.error(`Retrying after ${retryAfter} seconds!`);
+        return true;
+      }
+    },
+    onSecondaryRateLimit: (retryAfter, options, octokit) => {
+      octokit.log.warn(
+        `SecondaryRateLimit detected for request ${options.method} ${options.url}`
+      );
+
+      if (options.request.retryCount === 0) {
+        octokit.log.error(`Retrying after ${retryAfter} seconds!`);
+        return true;
+      }
+    },
+  }
 });
 
 async function deriveUserEmail(username) {
