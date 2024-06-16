@@ -1,6 +1,8 @@
 import { Octokit } from "octokit";
 
 const NUM_CO_AUTHORS = 10_000;
+const FOLLOWERS_START = 50;
+const FOLLOWERS_END = 4000;
 
 const octokit = new Octokit({
   auth: process.env.GH_PAT,
@@ -57,11 +59,23 @@ async function* allCoAuthors(minFollowers) {
   }
 }
 
+function randRange(start, end) {
+  return Math.floor(Math.random() * (end - start) + start);
+}
+
+let numCoAuthors = NUM_CO_AUTHORS;
+let minFollowers;
 console.log("👀");
 console.log();
-let numCoAuthors = NUM_CO_AUTHORS;
 outer: while (true) {
-  let minFollowers = Math.random() * (20_000 - 50) + 50;
+  let newMinFollowers = randRange(FOLLOWERS_START, FOLLOWERS_END);
+  while (
+    minFollowers === undefined ||
+    Math.abs(newMinFollowers - minFollowers) < 50
+  ) {
+    newMinFollowers = randRange(FOLLOWERS_START, FOLLOWERS_END);
+  }
+  minFollowers = newMinFollowers;
   for await (const coAuthor of allCoAuthors(minFollowers)) {
     if (numCoAuthors-- <= 0) {
       break outer;
