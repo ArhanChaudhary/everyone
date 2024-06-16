@@ -34,7 +34,7 @@ async function* allCoAuthors(minFollowers) {
   let usersIterator = octokit.paginate.iterator(octokit.rest.search.users, {
     q: `followers:>=${minFollowers}`,
     sort: "followers",
-    order: "desc",
+    order: "asc",
     per_page: 100,
   });
 
