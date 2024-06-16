@@ -9,27 +9,30 @@ const octokit = new Octokit({
 });
 
 async function deriveUserEmail(username) {
-  let [name, { data: events }] = await Promise.all([
-    octokit
-      .request("GET /users/{username}", {
-        username,
-      })
-      .then(
-        ({ data: { name } }) =>
-          name || Promise.reject(username + ": No name found")
-      ),
-    octokit.request("GET /users/{username}/events/public", {
+  let { data: events } = await octokit.request(
+    "GET /users/{username}/events/public",
+    {
       username,
-      per_page: 10,
-    }),
-  ]);
+      per_page: 100,
+    }
+  );
 
-  let email;
+  let emailCounts = {};
+  let maxEmail;
+  let maxEmailCount = 0;
   JSON.stringify(events, (_, jsObject) => {
-    if (jsObject?.email && jsObject?.name === name) email = jsObject.email;
+    let email = jsObject?.email;
+    if (email && jsObject.name) {
+      emailCounts[email] = (emailCounts[email] || 0) + 1;
+      if (emailCounts[email] > maxEmailCount) {
+        maxEmail = email;
+        maxEmailCount = emailCounts[email];
+      }
+    }
     return jsObject;
   });
-  return email || Promise.reject(username + ": No email found");
+
+  return maxEmail || Promise.reject(username + ": No email found");
 }
 
 async function* allCoAuthors(minFollowers) {
@@ -69,10 +72,7 @@ console.log("👀");
 console.log();
 outer: while (true) {
   let newMinFollowers = randRange(FOLLOWERS_START, FOLLOWERS_END);
-  while (
-    minFollowers === undefined ||
-    Math.abs(newMinFollowers - minFollowers) < 50
-  ) {
+  while (minFollowers && Math.abs(newMinFollowers - minFollowers) < 50) {
     newMinFollowers = randRange(FOLLOWERS_START, FOLLOWERS_END);
   }
   minFollowers = newMinFollowers;
@@ -83,4 +83,4 @@ outer: while (true) {
     console.log(coAuthor);
   }
 }
-console.error("\nDone!\n");
+console.error("Done!");
