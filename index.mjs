@@ -1,33 +1,33 @@
 import { Octokit } from "octokit";
 
-const NUM_CO_AUTHORS = 100_000;
+const NUM_CO_AUTHORS = Infinity;
 
 const octokit = new Octokit({
   auth: process.env.GH_PAT,
   throttle: {
     onRateLimit: (retryAfter, options, octokit) => {
-      console.error(
+      console.warn(
         `Request quota exhausted for request ${options.method} ${options.url}`
       );
 
       if (options.request.retryCount === 0) {
-        const now = new Date();
+        let now = new Date();
         now.setSeconds(now.getSeconds() + retryAfter);
-        console.error(
+        console.warn(
           `Retrying after ${retryAfter} seconds: ${now.toISOString()}`
         );
         return true;
       }
     },
     onSecondaryRateLimit: (retryAfter, options, octokit) => {
-      console.error(
+      console.warn(
         `SecondaryRateLimit detected for request ${options.method} ${options.url}`
       );
 
       if (options.request.retryCount === 0) {
-        const now = new Date();
+        let now = new Date();
         now.setSeconds(now.getSeconds() + retryAfter);
-        console.error(
+        console.warn(
           `Retrying after ${retryAfter} seconds: ${now.toISOString()}`
         );
         return true;
@@ -37,30 +37,37 @@ const octokit = new Octokit({
 });
 
 async function deriveUserEmail(username) {
-  let { data: events } = await octokit.request(
-    "GET /users/{username}/events/public",
+  let { data: repos } = await octokit.request("GET /users/{username}/repos", {
+    username,
+    per_page: 100,
+  });
+
+  let repo = repos.reduce((acc, repo) => {
+    if (!repo.fork && (!acc || repo.stargazers_count > acc.stargazers_count)) {
+      return repo;
+    } else {
+      return acc;
+    }
+  }, undefined);
+
+  if (!repo) {
+    return Promise.reject(username + ": No target repo found");
+  }
+
+  let { data: commits } = await octokit.request(
+    "GET /repos/{owner}/{repo}/commits",
     {
-      username,
-      per_page: 100,
+      owner: username,
+      repo: repo.name,
+      author: username,
+      per_page: 1,
     }
   );
 
-  let emailCounts = {};
-  let maxEmail;
-  let maxEmailCount = 0;
-  JSON.stringify(events, (_, jsObject) => {
-    let email = jsObject?.email;
-    if (email && jsObject.name) {
-      emailCounts[email] = (emailCounts[email] || 0) + 1;
-      if (emailCounts[email] > maxEmailCount) {
-        maxEmail = email;
-        maxEmailCount = emailCounts[email];
-      }
-    }
-    return jsObject;
-  });
-
-  return maxEmail || Promise.reject(username + ": No email found");
+  return (
+    commits?.[0]?.commit.author?.email ||
+    Promise.reject(username + ": No email found")
+  );
 }
 
 async function* allCoAuthors() {
@@ -75,19 +82,22 @@ async function* allCoAuthors() {
     if (users.length !== 0) {
       mostFollowersUsername = users[users.length - 1].login;
     }
-    let someCoAuthors = await Promise.allSettled(
-      users
-        .filter(({ type }) => type === "User")
-        .map(
-          async ({ login: username, email }) =>
-            `${username} <${email || (await deriveUserEmail(username))}>`
-        )
-    );
-    for (let { value: coAuthor, reason } of someCoAuthors) {
-      if (coAuthor) {
-        yield "Co-authored-by: " + coAuthor;
-      } else if (!reason.includes("No email found")) {
-        console.error(reason);
+    for (let { login: username, email, type } of users) {
+      if (type !== "User") {
+        continue;
+      }
+      try {
+        yield `Co-authored-by: ${username} <${
+          email || (await deriveUserEmail(username))
+        }>`;
+      } catch (e) {
+        if (
+          !(typeof e === "string") &&
+          e.message !==
+            "Git Repository is empty. - https://docs.github.com/rest/commits/commits#list-commits"
+        ) {
+          console.warn(e);
+        }
       }
     }
   }
