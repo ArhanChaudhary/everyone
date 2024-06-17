@@ -1,33 +1,39 @@
 import { Octokit } from "octokit";
 
-const NUM_CO_AUTHORS = 10_000;
-const FOLLOWERS_START = 50;
-const FOLLOWERS_END = 4000;
+const NUM_CO_AUTHORS = 100_000;
 
 const octokit = new Octokit({
   auth: process.env.GH_PAT,
   throttle: {
     onRateLimit: (retryAfter, options, octokit) => {
-      octokit.log.warn(
+      console.error(
         `Request quota exhausted for request ${options.method} ${options.url}`
       );
 
       if (options.request.retryCount === 0) {
-        octokit.log.error(`Retrying after ${retryAfter} seconds!`);
+        const now = new Date();
+        now.setSeconds(now.getSeconds() + retryAfter);
+        console.error(
+          `Retrying after ${retryAfter} seconds: ${now.toISOString()}`
+        );
         return true;
       }
     },
     onSecondaryRateLimit: (retryAfter, options, octokit) => {
-      octokit.log.warn(
+      console.error(
         `SecondaryRateLimit detected for request ${options.method} ${options.url}`
       );
 
       if (options.request.retryCount === 0) {
-        octokit.log.error(`Retrying after ${retryAfter} seconds!`);
+        const now = new Date();
+        now.setSeconds(now.getSeconds() + retryAfter);
+        console.error(
+          `Retrying after ${retryAfter} seconds: ${now.toISOString()}`
+        );
         return true;
       }
     },
-  }
+  },
 });
 
 async function deriveUserEmail(username) {
@@ -57,7 +63,7 @@ async function deriveUserEmail(username) {
   return maxEmail || Promise.reject(username + ": No email found");
 }
 
-async function* allCoAuthors(minFollowers) {
+async function* allCoAuthors() {
   let usersIterator = octokit.paginate.iterator(octokit.rest.search.users, {
     q: `followers:>=${minFollowers}`,
     sort: "followers",
@@ -66,6 +72,9 @@ async function* allCoAuthors(minFollowers) {
   });
 
   for await (let { data: users } of usersIterator) {
+    if (users.length !== 0) {
+      mostFollowersUsername = users[users.length - 1].login;
+    }
     let someCoAuthors = await Promise.allSettled(
       users
         .filter(({ type }) => type === "User")
@@ -77,32 +86,35 @@ async function* allCoAuthors(minFollowers) {
     for (let { value: coAuthor, reason } of someCoAuthors) {
       if (coAuthor) {
         yield "Co-authored-by: " + coAuthor;
-      } else {
+      } else if (!reason.includes("No email found")) {
         console.error(reason);
       }
     }
   }
 }
 
-function randRange(start, end) {
-  return Math.floor(Math.random() * (end - start) + start);
-}
-
 let numCoAuthors = NUM_CO_AUTHORS;
-let minFollowers;
-console.log("👀");
-console.log();
+let minFollowers = 0;
+let mostFollowersUsername;
+
+console.log("👀\n");
 outer: while (true) {
-  let newMinFollowers = randRange(FOLLOWERS_START, FOLLOWERS_END);
-  while (minFollowers && Math.abs(newMinFollowers - minFollowers) < 50) {
-    newMinFollowers = randRange(FOLLOWERS_START, FOLLOWERS_END);
-  }
-  minFollowers = newMinFollowers;
-  for await (const coAuthor of allCoAuthors(minFollowers)) {
+  console.warn(`Searching for users with >=${minFollowers} followers`);
+  for await (let coAuthor of allCoAuthors()) {
     if (numCoAuthors-- <= 0) {
       break outer;
     }
     console.log(coAuthor);
   }
+  // most followers
+  if (mostFollowersUsername === "torvalds") {
+    break;
+  }
+  let {
+    data: { followers },
+  } = await octokit.request("GET /users/{username}", {
+    username: mostFollowersUsername,
+  });
+  minFollowers = Math.max(minFollowers, followers) + 1;
 }
-console.error("Done!");
+console.warn("Done!");
