@@ -3,10 +3,6 @@
   "version": "1.0.0",
   "description": "A parody of \"everything\" from npm",
   "main": "index.js",
-  "scripts": {
-    "invite-everyone": "node index.mjs | git commit --allow-empty -F -",
-    "invite-everyone-1970": "GIT_COMMITTER_DATE=\"1970-01-01T00:00:00Z\" node index.mjs | git commit --allow-empty --date=\"1970-01-01T00:00:00Z\" -F -"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ArhanChaudhary/everyone.git"

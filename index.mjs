@@ -1,3 +1,5 @@
+// 50 concurrent
+
 import { Octokit } from "octokit";
 
 const NUM_CO_AUTHORS = Infinity;
@@ -36,37 +38,39 @@ const octokit = new Octokit({
   },
 });
 
-async function deriveUserEmail(username) {
-  let { data: repos } = await octokit.request("GET /users/{username}/repos", {
-    username,
-    per_page: 100,
-  });
-
-  let repo = repos.reduce((acc, repo) => {
-    if (!repo.fork && (!acc || repo.stargazers_count > acc.stargazers_count)) {
-      return repo;
-    } else {
-      return acc;
-    }
-  }, undefined);
-
-  if (!repo) {
-    return Promise.reject(username + ": No target repo found");
-  }
-
-  let { data: commits } = await octokit.request(
-    "GET /repos/{owner}/{repo}/commits",
+async function deriveUserEmail(username, nodeId) {
+  let bigChungus = await octokit.graphql(
+    `
+      query($username: String!, $nodeId: ID!) {
+        user(login: $username) {
+          repositories(first: 1, isFork: false, orderBy: {field: STARGAZERS, direction: DESC}) {
+            nodes {
+              defaultBranchRef {
+                target {
+                  ... on Commit {
+                    history(first: 1, author: { id: $nodeId }) {
+                      nodes {
+                        author {
+                          email
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `,
     {
-      owner: username,
-      repo: repo.name,
-      author: username,
-      per_page: 1,
+      username,
+      nodeId,
     }
   );
-
   return (
-    commits?.[0]?.commit.author?.email ||
-    Promise.reject(username + ": No email found")
+    bigChungus.user.repositories.nodes[0]?.defaultBranchRef.target.history
+      .nodes[0]?.author.email || Promise.reject(username + ": No email found")
   );
 }
 
