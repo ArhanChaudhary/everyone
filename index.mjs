@@ -84,17 +84,20 @@ async function* allCoAuthors() {
             }`
         )
         .join("\n")}
-    }`;
+    }`.replace(/[\s,]+/g, " "); // see https://github.com/urql-graphql/urql/commit/b609ce03bda2f0f4b1062e9940bafe6653aad39b
 
-    for (let [i, jsonWithEmail] of Object.values(
-      await octokit.graphql(bigChungus)
-    ).entries()) {
-      let email =
-        jsonWithEmail.repositories.nodes[0]?.defaultBranchRef?.target.history
-          .nodes[0]?.author.email;
-      if (email) {
-        yield `Co-authored-by: ${users[i].login} <${email}>`;
+    try {
+      let graphql = await octokit.graphql(bigChungus);
+      for (let [i, jsonWithEmail] of Object.values(graphql).entries()) {
+        let email =
+          jsonWithEmail.repositories.nodes[0]?.defaultBranchRef?.target.history
+            .nodes[0]?.author.email;
+        if (email) {
+          yield `Co-authored-by: ${users[i].login} <${email}>`;
+        }
       }
+    } catch (e) {
+      console.error(e);
     }
   }
 }
