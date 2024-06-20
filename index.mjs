@@ -3,7 +3,7 @@ import { Octokit } from "octokit";
 
 const CO_AUTHOR_COUNT = 150_000;
 const FOLLOWERS_PER_SEARCH_USER = 100;
-const BATCH_USER_COUNT = 75;
+const BATCH_USER_COUNT = 50;
 
 const octokit = new Octokit({
   auth: process.env.GH_PAT,
