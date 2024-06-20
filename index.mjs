@@ -1,6 +1,9 @@
+import { stripIgnoredCharacters } from "graphql/utilities/stripIgnoredCharacters.js";
 import { Octokit } from "octokit";
 
-const NUM_CO_AUTHORS = Infinity;
+const CO_AUTHOR_COUNT = 150_000;
+const FOLLOWERS_PER_SEARCH_USER = 100;
+const BATCH_USER_COUNT = 75;
 
 const octokit = new Octokit({
   auth: process.env.GH_PAT,
@@ -36,34 +39,13 @@ const octokit = new Octokit({
   },
 });
 
-async function* allCoAuthors() {
-  let usersIterator = octokit.paginate.iterator(octokit.rest.search.users, {
-    q: `followers:>=${minFollowers}`,
-    sort: "followers",
-    order: "asc",
-    per_page: 100,
-  });
-
-  for await (let { data: users } of usersIterator) {
-    if (users.length === 0) {
-      continue;
-    }
-    mostFollowersLogin = users[users.length - 1].login;
-    users = users.filter(({ type }) => type === "User");
-
-    for (let { login, email } of users) {
-      if (email) {
-        yield `Co-authored-by: ${login} <${email}>`;
-      }
-    }
-
-    // TODO: what else do I call this!?
-    let bigChungus = `
+function emailsFromUsersQuery(users) {
+  return stripIgnoredCharacters(`
     {
       ${users
         .map(
           ({ login, node_id: nodeId }, index) =>
-            `user${index}: user(login: "${login}") {
+            `_${index}: user(login: "${login}") {
               repositories(first: 1, isFork: false, orderBy: {field: STARGAZERS, direction: DESC}) {
                 nodes {
                   defaultBranchRef {
@@ -84,46 +66,108 @@ async function* allCoAuthors() {
             }`
         )
         .join("\n")}
-    }`.replace(/[\s,]+/g, " "); // see https://github.com/urql-graphql/urql/commit/b609ce03bda2f0f4b1062e9940bafe6653aad39b
+    }
+  `);
+}
 
-    try {
-      let graphql = await octokit.graphql(bigChungus);
-      for (let [i, jsonWithEmail] of Object.values(graphql).entries()) {
-        let email =
-          jsonWithEmail.repositories.nodes[0]?.defaultBranchRef?.target.history
-            .nodes[0]?.author.email;
-        if (email) {
-          yield `Co-authored-by: ${users[i].login} <${email}>`;
-        }
-      }
-    } catch (e) {
-      console.error(e);
+async function* coAuthorsFromUsersIterator(usersBatch) {
+  let emails;
+  try {
+    let query = emailsFromUsersQuery(usersBatch.slice(0, BATCH_USER_COUNT));
+    emails = await octokit.graphql(query);
+  } catch (e) {
+    console.error(`Error deriving emails: ${e}`);
+    return;
+  }
+
+  for (let [i, jsonWithEmail] of Object.entries(emails)) {
+    let email =
+      jsonWithEmail.repositories.nodes[0]?.defaultBranchRef?.target.history
+        .nodes[0]?.author.email;
+    if (email) {
+      i = i.substring(1);
+      let user = usersBatch[i];
+      // do this null stuff in case FOLLOWERS_PER_SEARCH_USER breaks early
+      usersBatch[i] = null;
+      yield `Co-authored-by: ${user.login} <${email}>`;
     }
   }
 }
 
-let numCoAuthors = NUM_CO_AUTHORS;
-let minFollowers = 0;
-let mostFollowersLogin;
+async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
+  let rootUserFollowersIterator = octokit.paginate.iterator(
+    octokit.rest.users.listFollowersForUser,
+    { username: rootUser.login, per_page: 100 }
+  );
 
-console.log("👀\n");
-outer: while (true) {
-  console.warn(`Searching for users with >=${minFollowers} followers`);
-  for await (let coAuthor of allCoAuthors()) {
-    if (numCoAuthors-- <= 0) {
-      break outer;
+  let usersCount = 0;
+  while (true) {
+    for (let i = usersBatch.length - 1; i >= 0; i -= 1) {
+      if (usersBatch[i] === null) {
+        usersBatch.splice(i, 1);
+      }
     }
-    console.log(coAuthor);
+    // if there are still followwers to be processed from the previous user
+    // i know it messes up usersCount but thats still fine as it yields the
+    // exact amount of co-authors
+    if (usersBatch.length < BATCH_USER_COUNT) {
+      try {
+        for await (let { data: someUsers } of rootUserFollowersIterator) {
+          usersBatch.push(...someUsers);
+          if (usersBatch.length >= BATCH_USER_COUNT) {
+            break;
+          }
+        }
+        if (usersBatch.length < BATCH_USER_COUNT) {
+          // out of followers, next user
+          return;
+        }
+      } catch (e) {
+        console.error(`Error fetching followers for ${rootUser.login}: ${e}`);
+        return;
+      }
+    }
+    for await (let coAuthor of coAuthorsFromUsersIterator(usersBatch)) {
+      yield coAuthor;
+      if (++usersCount >= FOLLOWERS_PER_SEARCH_USER) {
+        return;
+      }
+    }
   }
-  // most followers
-  if (mostFollowersLogin === "torvalds") {
+}
+
+async function* coAuthorsIterator() {
+  // I know... but this needs to be sequential or else github complains
+  // about secondary rate limits
+  let usersBatch = [];
+  // if the pagination throws an error... tough luck
+  // octokit anyways retries once by default
+  for await (let { data: searchUsers } of octokit.paginate.iterator(
+    octokit.rest.search.users,
+    {
+      q: "followers:>=0",
+      sort: "followers",
+      per_page: 100,
+    }
+  )) {
+    for (let searchUser of searchUsers) {
+      for await (let coAuthor of userFollowersCoAuthorIterator(
+        searchUser,
+        usersBatch
+      )) {
+        yield coAuthor;
+      }
+    }
+  }
+}
+
+let coAuthorCount = 0;
+let start = new Date();
+console.log("👀\n");
+for await (let coAuthor of coAuthorsIterator()) {
+  console.log(coAuthor);
+  if (++coAuthorCount >= CO_AUTHOR_COUNT) {
     break;
   }
-  let {
-    data: { followers },
-  } = await octokit.request("GET /users/{username}", {
-    username: mostFollowersLogin,
-  });
-  minFollowers = Math.max(minFollowers, followers) + 1;
 }
-console.warn("Done!");
+console.warn(`Done in ${Math.round((new Date() - start) / 1000)} seconds!`);
