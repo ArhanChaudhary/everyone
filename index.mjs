@@ -10,28 +10,28 @@ const octokit = new Octokit({
   throttle: {
     onRateLimit: (retryAfter, options, octokit) => {
       console.warn(
-        `Request quota exhausted for request ${options.method} ${options.url}`
+        `[WARNING] Request quota exhausted for request ${options.method} ${options.url}`
       );
 
       if (options.request.retryCount === 0) {
         let now = new Date();
         now.setSeconds(now.getSeconds() + retryAfter);
         console.warn(
-          `Retrying after ${retryAfter} seconds: ${now.toISOString()}`
+          `[WARNING] Retrying after ${retryAfter} seconds: ${now.toISOString()}`
         );
         return true;
       }
     },
     onSecondaryRateLimit: (retryAfter, options, octokit) => {
       console.warn(
-        `SecondaryRateLimit detected for request ${options.method} ${options.url}`
+        `[WARNING] SecondaryRateLimit detected for request ${options.method} ${options.url}`
       );
 
       if (options.request.retryCount === 0) {
         let now = new Date();
         now.setSeconds(now.getSeconds() + retryAfter);
         console.warn(
-          `Retrying after ${retryAfter} seconds: ${now.toISOString()}`
+          `[WARNING] Retrying after ${retryAfter} seconds: ${now.toISOString()}`
         );
         return true;
       }
@@ -76,7 +76,9 @@ async function* coAuthorsFromUsersIterator(usersBatch) {
     let query = emailsFromUsersQuery(usersBatch.slice(0, BATCH_USER_COUNT));
     emails = await octokit.graphql(query);
   } catch (e) {
-    console.error(`Error deriving emails: ${e}`);
+    console.error(
+      `[ERROR] Error deriving emails for query ${query}: ${e.toString()}`
+    );
     return;
   }
 
@@ -123,7 +125,11 @@ async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
           return;
         }
       } catch (e) {
-        console.error(`Error fetching followers for ${rootUser.login}: ${e}`);
+        console.error(
+          `[ERROR] Error fetching followers for ${
+            rootUser.login
+          }: ${e.toString()}`
+        );
         return;
       }
     }
@@ -151,6 +157,7 @@ async function* coAuthorsIterator() {
     }
   )) {
     for (let searchUser of searchUsers) {
+      console.warn(`[INFO] Processing followers for ${searchUser.login}`);
       for await (let coAuthor of userFollowersCoAuthorIterator(
         searchUser,
         usersBatch
