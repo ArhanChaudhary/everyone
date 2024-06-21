@@ -1,6 +1,8 @@
 import { stripIgnoredCharacters } from "graphql/utilities/stripIgnoredCharacters.js";
 import { Octokit } from "octokit";
 
+// I don't account for duplicate co-authors nor do I validate them so
+// if you should overestimate this value
 const CO_AUTHOR_COUNT = 135_000;
 const BATCH_USER_COUNT = 100;
 const ONLY_NOREPLY_EMAILS = true;
@@ -165,7 +167,11 @@ async function* coAuthorsIterator() {
     }
   )) {
     for (let searchUser of searchUsers) {
-      console.warn(`[INFO] Processing followers for ${searchUser.login}`);
+      console.warn(
+        `[INFO] Processing followers for ${searchUser.login} at ${Math.round(
+          (new Date() - start) / 1000
+        )} seconds in`
+      );
       for await (let coAuthor of userFollowersCoAuthorIterator(
         searchUser,
         usersBatch
