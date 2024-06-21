@@ -1,8 +1,8 @@
 import { stripIgnoredCharacters } from "graphql/utilities/stripIgnoredCharacters.js";
 import { Octokit } from "octokit";
 
-const CO_AUTHOR_COUNT = 150_000;
-const FOLLOWERS_PER_SEARCH_USER = 1500;
+const CO_AUTHOR_COUNT = 135_000;
+const FOLLOWERS_PER_SEARCH_USER = 250;
 const BATCH_USER_COUNT = 100;
 const ONLY_NOREPLY_EMAILS = true;
 
@@ -81,6 +81,7 @@ async function* coAuthorsFromUsersIterator(usersBatch) {
     console.error(
       `[ERROR] Error deriving emails for query ${query}: ${e.toString()}`
     );
+    usersBatch.fill(null, 0, BATCH_USER_COUNT);
     return;
   }
 
