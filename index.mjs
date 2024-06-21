@@ -73,9 +73,8 @@ function emailsFromUsersQuery(users) {
 
 async function* coAuthorsFromUsersIterator(usersBatch) {
   let emails;
-  let query;
+  let query = emailsFromUsersQuery(usersBatch.slice(0, BATCH_USER_COUNT));
   try {
-    query = emailsFromUsersQuery(usersBatch.slice(0, BATCH_USER_COUNT));
     emails = await octokit.graphql(query);
   } catch (e) {
     console.error(
