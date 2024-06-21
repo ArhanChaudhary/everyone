@@ -92,7 +92,7 @@ async function* coAuthorsFromUsersIterator(usersBatch) {
     i = i.substring(1);
     if (
       email &&
-      (!ONLY_NOREPLY_EMAILS || !email.endsWith("@users.noreply.github.com"))
+      (!ONLY_NOREPLY_EMAILS || email.endsWith("@users.noreply.github.com"))
     ) {
       let user = usersBatch[i];
       usersBatch[i] = null;
