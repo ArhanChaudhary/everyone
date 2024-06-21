@@ -2,7 +2,6 @@ import { stripIgnoredCharacters } from "graphql/utilities/stripIgnoredCharacters
 import { Octokit } from "octokit";
 
 const CO_AUTHOR_COUNT = 135_000;
-const FOLLOWERS_PER_SEARCH_USER = 250;
 const BATCH_USER_COUNT = 100;
 const ONLY_NOREPLY_EMAILS = true;
 
@@ -128,7 +127,9 @@ async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
           }
         }
         if (usersBatch.length < BATCH_USER_COUNT) {
-          // out of followers, next user
+          console.warn(
+            `[WARNING] Only processed ${usersBatch.length}/${FOLLOWERS_PER_SEARCH_USER} followers from user ${rootUser.login}`
+          );
           return;
         }
       } catch (e) {
@@ -175,6 +176,9 @@ async function* coAuthorsIterator() {
   }
 }
 
+// search the first 1000 users, get this many followers per user in order to
+// reach co-author count
+const FOLLOWERS_PER_SEARCH_USER = Math.ceil(CO_AUTHOR_COUNT / 1000);
 let coAuthorCount = 0;
 let start = new Date();
 console.log("👀\n");
@@ -184,4 +188,9 @@ for await (let coAuthor of coAuthorsIterator()) {
     break;
   }
 }
-console.warn(`Done in ${Math.round((new Date() - start) / 1000)} seconds!`);
+if (coAuthorCount < CO_AUTHOR_COUNT) {
+  console.warn(
+    `[WARNING] Only processed ${coAuthorCount}/${CO_AUTHOR_COUNT} co-authors`
+  );
+}
+console.warn(`\nDone in ${Math.round((new Date() - start) / 1000)} seconds!`);
