@@ -2,8 +2,9 @@ import { stripIgnoredCharacters } from "graphql/utilities/stripIgnoredCharacters
 import { Octokit } from "octokit";
 
 const CO_AUTHOR_COUNT = 150_000;
-const FOLLOWERS_PER_SEARCH_USER = 100;
-const BATCH_USER_COUNT = 50;
+const FOLLOWERS_PER_SEARCH_USER = 1500;
+const BATCH_USER_COUNT = 100;
+const ONLY_NOREPLY_EMAILS = true;
 
 const octokit = new Octokit({
   auth: process.env.GH_PAT,
@@ -87,12 +88,17 @@ async function* coAuthorsFromUsersIterator(usersBatch) {
     let email =
       jsonWithEmail.repositories.nodes[0]?.defaultBranchRef?.target.history
         .nodes[0]?.author.email;
-    if (email) {
-      i = i.substring(1);
+    // null indicates user was processed and should be removed from the batch
+    i = i.substring(1);
+    if (
+      email &&
+      (!ONLY_NOREPLY_EMAILS || !email.endsWith("@users.noreply.github.com"))
+    ) {
       let user = usersBatch[i];
-      // do this null stuff in case FOLLOWERS_PER_SEARCH_USER breaks early
       usersBatch[i] = null;
       yield `Co-authored-by: ${user.login} <${email}>`;
+    } else {
+      usersBatch[i] = null;
     }
   }
 }
