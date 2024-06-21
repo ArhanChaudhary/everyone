@@ -3,8 +3,8 @@ import { Octokit } from "octokit";
 
 // I don't account for duplicate co-authors nor do I validate them so
 // if you should overestimate this value
-const CO_AUTHOR_COUNT = 135_000;
-const BATCH_USER_COUNT = 100;
+const CO_AUTHOR_COUNT = 140_000;
+const BATCH_USER_COUNT = 85;
 const ONLY_NOREPLY_EMAILS = true;
 
 const octokit = new Octokit({
@@ -46,7 +46,7 @@ function emailsFromUsersQuery(users) {
     {
       ${users
         .map(
-          ({ login, node_id: nodeId }, index) =>
+          ({ login, id: nodeId }, index) =>
             `_${index}: user(login: "${login}") {
               repositories(first: 1, isFork: false, orderBy: {field: STARGAZERS, direction: DESC}) {
                 nodes {
@@ -84,6 +84,14 @@ async function* coAuthorsFromUsersIterator(usersBatch) {
     usersBatch.fill(null, 0, BATCH_USER_COUNT);
     return;
   }
+  // happened one time for some strange reason
+  if (!emails) {
+    console.warn(
+      `[WARNING] Emails is unexpectedly ${emails} from query ${query}`
+    );
+    usersBatch.fill(null, 0, BATCH_USER_COUNT);
+    return;
+  }
 
   for (let [i, jsonWithEmail] of Object.entries(emails)) {
     let email =
@@ -105,9 +113,23 @@ async function* coAuthorsFromUsersIterator(usersBatch) {
 }
 
 async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
-  let rootUserFollowersIterator = octokit.paginate.iterator(
-    octokit.rest.users.listFollowersForUser,
-    { username: rootUser.login, per_page: 100 }
+  let rootUserFollowersIterator = octokit.graphql.paginate.iterator(
+    stripIgnoredCharacters(`
+      query($cursor: String) {
+        user(login: "${rootUser.login}") {
+          followers(first: 100, after: $cursor) {
+            nodes {
+              login
+              id
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      }
+    `)
   );
 
   let usersCount = 0;
@@ -122,8 +144,8 @@ async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
     // exact amount of co-authors
     if (usersBatch.length < BATCH_USER_COUNT) {
       try {
-        for await (let { data: someUsers } of rootUserFollowersIterator) {
-          usersBatch.push(...someUsers);
+        for await (let jsonWithFollowers of rootUserFollowersIterator) {
+          usersBatch.push(...jsonWithFollowers.user.followers.nodes);
           if (usersBatch.length >= BATCH_USER_COUNT) {
             break;
           }
@@ -152,26 +174,56 @@ async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
   }
 }
 
+async function* searchUsersIterator(searchMaxFollowers) {
+  let _searchUsersIterator = octokit.graphql.paginate.iterator(
+    stripIgnoredCharacters(`
+      query($cursor: String) {
+        search(query: "${
+          searchMaxFollowers === Infinity
+            ? "followers:>=0"
+            : `followers:<${searchMaxFollowers}`
+        }", type: USER, first: 100, after: $cursor) {
+          nodes {
+            ... on User {
+              login
+              id
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+  `)
+  );
+  try {
+    for await (let jsonWithSearchUsers of _searchUsersIterator) {
+      for (let searchUser of jsonWithSearchUsers.search.nodes) {
+        if (Object.keys(searchUser).length !== 0) {
+          yield searchUser;
+        }
+      }
+    }
+  } catch (e) {
+    console.error(`[ERROR] Error fetching search users: ${e.toString()}`);
+  }
+}
+
 async function* coAuthorsIterator() {
   // I know... but this needs to be sequential or else github complains
   // about secondary rate limits
   let usersBatch = [];
-  // if the pagination throws an error... tough luck
-  // octokit anyways retries once by default
-  for await (let { data: searchUsers } of octokit.paginate.iterator(
-    octokit.rest.search.users,
-    {
-      q: "followers:>=0",
-      sort: "followers",
-      per_page: 100,
-    }
-  )) {
-    for (let searchUser of searchUsers) {
+  let searchMaxFollowers = Infinity;
+  let minFollowersLogin;
+  while (true) {
+    for await (let searchUser of searchUsersIterator(searchMaxFollowers)) {
       console.warn(
         `[INFO] Processing followers for ${searchUser.login} at ${Math.round(
           (new Date() - start) / 1000
         )} seconds in`
       );
+      minFollowersLogin = searchUser.login;
       for await (let coAuthor of userFollowersCoAuthorIterator(
         searchUser,
         usersBatch
@@ -179,12 +231,28 @@ async function* coAuthorsIterator() {
         yield coAuthor;
       }
     }
+    if (minFollowersLogin) {
+      // if this fails, tough luck
+      ({
+        user: {
+          followers: { totalCount: searchMaxFollowers },
+        },
+      } = await octokit.graphql(
+        stripIgnoredCharacters(`
+          {
+            user(login: "${minFollowersLogin}") {
+              followers {
+                totalCount
+              }
+            }
+          }
+        `)
+      ));
+    }
   }
 }
 
-// search the first 1000 users, get this many followers per user in order to
-// reach co-author count
-const FOLLOWERS_PER_SEARCH_USER = Math.ceil(CO_AUTHOR_COUNT / 1000);
+const FOLLOWERS_PER_SEARCH_USER = Math.ceil(Math.sqrt(CO_AUTHOR_COUNT));
 let coAuthorCount = 0;
 let start = new Date();
 console.log("👀\n");
