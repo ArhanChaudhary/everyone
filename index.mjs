@@ -72,6 +72,14 @@ const octokit = new Octokit({
   },
 });
 
+function filterInPlace(array, predicate) {
+  for (let i = array.length - 1; i >= 0; i--) {
+    if (!predicate(array[i])) {
+      array.splice(i, 1);
+    }
+  }
+}
+
 function emailsFromUsersQuery(users) {
   return stripIgnoredCharacters(`
     {
@@ -143,7 +151,7 @@ async function* coAuthorsFromUsersIterator(usersBatch) {
   }
 }
 
-async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
+async function* followerCoAuthorsIterator(rootUser, usersBatch) {
   let rootUserFollowersIterator = octokit.graphql.paginate.iterator(
     stripIgnoredCharacters(`
       query($cursor: String) {
@@ -163,16 +171,12 @@ async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
     `)
   );
 
-  let usersCount = 0;
-  while (usersCount < SEARCH_USER_FOLLOWERS_DEPTH) {
-    for (let i = usersBatch.length - 1; i >= 0; i -= 1) {
-      if (usersBatch[i] === null) {
-        usersBatch.splice(i, 1);
-      }
-    }
-    // if there are still followwers to be processed from the previous user
-    // i know it messes up usersCount but thats still fine as it yields the
-    // exact amount of co-authors
+  filterInPlace(usersBatch, (user) => user !== null);
+  // there are still followers to be processed from the previous user, adjust
+  // for that
+  let followerCoAuthorCount = -usersBatch.length;
+  while (followerCoAuthorCount < SEARCH_USER_FOLLOWERS_DEPTH) {
+    // if false, one batch wasn't enough; keep batching the group of users
     if (usersBatch.length < BATCH_USER_COUNT) {
       try {
         for await (let jsonWithFollowers of rootUserFollowersIterator) {
@@ -198,8 +202,9 @@ async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
     }
     for await (let coAuthor of coAuthorsFromUsersIterator(usersBatch)) {
       yield coAuthor;
-      usersCount++;
+      followerCoAuthorCount++;
     }
+    filterInPlace(usersBatch, (user) => user !== null);
   }
 }
 
@@ -253,7 +258,7 @@ async function* coAuthorsIterator() {
         )} seconds in`
       );
       minFollowersLogin = searchUser.login;
-      for await (let coAuthor of userFollowersCoAuthorIterator(
+      for await (let coAuthor of followerCoAuthorsIterator(
         searchUser,
         usersBatch
       )) {

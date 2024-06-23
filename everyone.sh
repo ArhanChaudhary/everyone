@@ -32,7 +32,7 @@ FIRST_ITERATION=1
 for i in split*
 do
     if [ $FIRST_ITERATION -eq 0 ]; then
-        sleep 3
+        sleep 120
     fi
     FIRST_ITERATION=0
     printf '👀\n\n%s' $(cat $i) | git commit --allow-empty -F -
