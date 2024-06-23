@@ -2,10 +2,11 @@ import { stripIgnoredCharacters } from "graphql/utilities/stripIgnoredCharacters
 import { Octokit } from "octokit";
 
 // I don't account for duplicate co-authors nor do I validate them so
-// if you should overestimate this value
-const CO_AUTHOR_COUNT = 140_000;
+// you should overestimate this value by a factor of around 1.5
+const CO_AUTHOR_COUNT = 146_000;
 const BATCH_USER_COUNT = 85;
 const ONLY_NOREPLY_EMAILS = true;
+const INITIAL_SEARCH_MAX_FOLLOWERS = Infinity;
 
 const octokit = new Octokit({
   auth: process.env.GH_PAT,
@@ -214,7 +215,7 @@ async function* coAuthorsIterator() {
   // I know... but this needs to be sequential or else github complains
   // about secondary rate limits
   let usersBatch = [];
-  let searchMaxFollowers = Infinity;
+  let searchMaxFollowers = INITIAL_SEARCH_MAX_FOLLOWERS;
   let minFollowersLogin;
   while (true) {
     for await (let searchUser of searchUsersIterator(searchMaxFollowers)) {
