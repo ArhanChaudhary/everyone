@@ -47,14 +47,14 @@ function emailsFromUsersQuery(users) {
     {
       ${users
         .map(
-          ({ login, id: nodeId }, index) =>
+          ({ login, id }, index) =>
             `_${index}: user(login: "${login}") {
               repositories(first: 1, isFork: false, orderBy: {field: STARGAZERS, direction: DESC}) {
                 nodes {
                   defaultBranchRef {
                     target {
                       ... on Commit {
-                        history(first: 1, author: { id: "${nodeId}" }) {
+                        history(first: 1, author: { id: "${id}" }) {
                           nodes {
                             author {
                               email
@@ -98,8 +98,8 @@ async function* coAuthorsFromUsersIterator(usersBatch) {
     let email =
       jsonWithEmail.repositories.nodes[0]?.defaultBranchRef?.target.history
         .nodes[0]?.author.email;
-    // null indicates user was processed and should be removed from the batch
     i = i.substring(1);
+    // null indicates user was processed and should be removed from the batch
     if (
       email &&
       (!ONLY_NOREPLY_EMAILS || email.endsWith("@users.noreply.github.com"))
@@ -134,7 +134,7 @@ async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
   );
 
   let usersCount = 0;
-  while (true) {
+  while (usersCount < FOLLOWERS_PER_SEARCH_USER) {
     for (let i = usersBatch.length - 1; i >= 0; i -= 1) {
       if (usersBatch[i] === null) {
         usersBatch.splice(i, 1);
@@ -168,9 +168,7 @@ async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
     }
     for await (let coAuthor of coAuthorsFromUsersIterator(usersBatch)) {
       yield coAuthor;
-      if (++usersCount >= FOLLOWERS_PER_SEARCH_USER) {
-        return;
-      }
+      usersCount++;
     }
   }
 }
