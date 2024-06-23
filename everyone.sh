@@ -1,5 +1,31 @@
 #!/bin/bash
 
+
+
+# Copyright 2024, Arhan Chaudhary, All rights reserved.
+#
+# Hey there, curious reader
+#
+# This program is *solely* meant for educational purposes. I love making
+# my software public, but I kindly request for you to be mindful and avoid
+# misuse relating to email harvesting/spamming.
+#
+# Please familiarize yourself with GitHub's Acceptable Use Policies on:
+#
+# Impersonation https://docs.github.com/en/site-policy/acceptable-use-policies/github-impersonation
+# Spam and Inauthentic Activity https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies#4-spam-and-inauthentic-activity-on-github
+# Information Usage Restrictions https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies#7-information-usage-restrictions
+# API Terms https://docs.github.com/en/site-policy/github-terms/github-terms-of-service#h-api-terms
+# Excessive Bandwidth Use https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies#9-excessive-bandwidth-use
+#
+# And make sure your use of information complies with the GitHub Privacy Statement:
+#
+# https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement
+#
+# Thank you!
+
+
+
 if [ -z "$GH_PAT" ]; then
     echo "You need a GitHub Personal Access Token to run this script"
     echo "Set it as the environment variable GH_PAT"
@@ -39,4 +65,4 @@ do
 done
 
 rm split*
-echo "Co-authors ssuccessfully processed!"
+echo "Co-authors successfully processed!"

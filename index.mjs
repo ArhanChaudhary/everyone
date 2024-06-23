@@ -1,12 +1,28 @@
 /**
+ * Copyright 2024, Arhan Chaudhary, All rights reserved.
+ *
  * Hey there, curious reader
  *
  * This program is *solely* meant for educational purposes. I love making
  * my software public, but I kindly request for you to be mindful and avoid
- * misuse relating to email harvesting/spamming. Thank you!
+ * misuse relating to email harvesting/spamming.
  *
- * You may toggle and adjust the following settings for your usage
+ * Please familiarize yourself with GitHub's Acceptable Use Policies on:
+ *
+ * Impersonation https://docs.github.com/en/site-policy/acceptable-use-policies/github-impersonation
+ * Spam and Inauthentic Activity https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies#4-spam-and-inauthentic-activity-on-github
+ * Information Usage Restrictions https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies#7-information-usage-restrictions
+ * API Terms https://docs.github.com/en/site-policy/github-terms/github-terms-of-service#h-api-terms
+ * Excessive Bandwidth Use https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies#9-excessive-bandwidth-use
+ *
+ * And make sure your use of information complies with the GitHub Privacy Statement:
+ *
+ * https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement
+ *
+ * Thank you! You may toggle and adjust the following settings for your usage:
  */
+
+
 
 // I don't account for duplicate co-authors nor do I validate them so
 // you should overestimate this value by a factor of around 1.5
@@ -17,6 +33,7 @@ const CO_AUTHOR_COUNT = parseInt(
 );
 
 // filter only for users with noreply emails
+// please think twice before setting this to false
 const ONLY_NOREPLY_EMAILS = true;
 // around how many co authors to get for each search user, set to Infinity to
 // search every follower
@@ -26,6 +43,8 @@ const SEARCH_USER_FOLLOWERS_DEPTH = Math.ceil(Math.sqrt(CO_AUTHOR_COUNT));
 const INITIAL_MAX_FOLLOWERS = Infinity;
 // how many users to process in a single graphql query, 85 is around optimal
 const BATCH_USER_COUNT = 85;
+
+
 
 if (Number.isNaN(CO_AUTHOR_COUNT)) {
   console.error(
@@ -171,6 +190,8 @@ async function* followerCoAuthorsIterator(rootUser, usersBatch) {
     `)
   );
 
+  // I don't *think* this is necessary, but the logic is very fragile so lets
+  // just be safe
   filterInPlace(usersBatch, (user) => user !== null);
   // there are still followers to be processed from the previous user, adjust
   // for that
@@ -234,6 +255,7 @@ async function* searchUsersIterator(searchMaxFollowers) {
   try {
     for await (let jsonWithSearchUsers of _searchUsersIterator) {
       for (let searchUser of jsonWithSearchUsers.search.nodes) {
+        // can timeout and return an empty object
         if (Object.keys(searchUser).length !== 0) {
           yield searchUser;
         }
