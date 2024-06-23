@@ -1,12 +1,42 @@
-import { stripIgnoredCharacters } from "graphql/utilities/stripIgnoredCharacters.js";
-import { Octokit } from "octokit";
+/**
+ * Hey there, curious reader
+ *
+ * This program is *solely* meant for educational purposes. I love making
+ * my software public, but I kindly request for you to be mindful and avoid
+ * misuse relating to email harvesting/spamming. Thank you!
+ *
+ * You may toggle and adjust the following settings for your usage
+ */
 
 // I don't account for duplicate co-authors nor do I validate them so
 // you should overestimate this value by a factor of around 1.5
-const CO_AUTHOR_COUNT = 146_000;
-const BATCH_USER_COUNT = 85;
+const CO_AUTHOR_COUNT = parseInt(
+  process.argv
+    .find((arg) => arg.startsWith("--co-author-count="))
+    ?.substring(18)
+);
+
+// filter only for users with noreply emails
 const ONLY_NOREPLY_EMAILS = true;
-const INITIAL_SEARCH_MAX_FOLLOWERS = Infinity;
+// around how many co authors to get for each search user, set to Infinity to
+// search every follower
+const SEARCH_USER_FOLLOWERS_DEPTH = Math.ceil(Math.sqrt(CO_AUTHOR_COUNT));
+// how many followers to start searching from in descending order, set to
+// Infinity to start from most followed users
+const INITIAL_MAX_FOLLOWERS = Infinity;
+// how many users to process in a single graphql query, 85 is around optimal
+const BATCH_USER_COUNT = 85;
+
+if (Number.isNaN(CO_AUTHOR_COUNT)) {
+  console.error(
+    `Invalid co_author_count argument: ${process.argv[2]}
+Usage: index.mjs --co_author_count=[N]`
+  );
+  process.exit(1);
+}
+
+import { stripIgnoredCharacters } from "graphql/utilities/stripIgnoredCharacters.js";
+import { Octokit } from "octokit";
 
 const octokit = new Octokit({
   auth: process.env.GH_PAT,
@@ -134,7 +164,7 @@ async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
   );
 
   let usersCount = 0;
-  while (usersCount < FOLLOWERS_PER_SEARCH_USER) {
+  while (usersCount < SEARCH_USER_FOLLOWERS_DEPTH) {
     for (let i = usersBatch.length - 1; i >= 0; i -= 1) {
       if (usersBatch[i] === null) {
         usersBatch.splice(i, 1);
@@ -153,7 +183,7 @@ async function* userFollowersCoAuthorIterator(rootUser, usersBatch) {
         }
         if (usersBatch.length < BATCH_USER_COUNT) {
           console.warn(
-            `[WARNING] Only processed ${usersBatch.length}/${FOLLOWERS_PER_SEARCH_USER} followers from user ${rootUser.login}`
+            `[WARNING] Only processed ${usersBatch.length}/${SEARCH_USER_FOLLOWERS_DEPTH} followers from user ${rootUser.login}`
           );
           return;
         }
@@ -213,10 +243,10 @@ async function* coAuthorsIterator() {
   // I know... but this needs to be sequential or else github complains
   // about secondary rate limits
   let usersBatch = [];
-  let searchMaxFollowers = INITIAL_SEARCH_MAX_FOLLOWERS;
+  let maxFollowers = INITIAL_MAX_FOLLOWERS;
   let minFollowersLogin;
   while (true) {
-    for await (let searchUser of searchUsersIterator(searchMaxFollowers)) {
+    for await (let searchUser of searchUsersIterator(maxFollowers)) {
       console.warn(
         `[INFO] Processing followers for ${searchUser.login} at ${Math.round(
           (new Date() - start) / 1000
@@ -234,7 +264,7 @@ async function* coAuthorsIterator() {
       // if this fails, tough luck
       ({
         user: {
-          followers: { totalCount: searchMaxFollowers },
+          followers: { totalCount: maxFollowers },
         },
       } = await octokit.graphql(
         stripIgnoredCharacters(`
@@ -251,10 +281,8 @@ async function* coAuthorsIterator() {
   }
 }
 
-const FOLLOWERS_PER_SEARCH_USER = Math.ceil(Math.sqrt(CO_AUTHOR_COUNT));
 let coAuthorCount = 0;
 let start = new Date();
-console.log("👀\n");
 for await (let coAuthor of coAuthorsIterator()) {
   console.log(coAuthor);
   if (++coAuthorCount >= CO_AUTHOR_COUNT) {
