@@ -6,7 +6,7 @@ Please navigate to the [ethicality and legality](#ethicality-and-legality) secti
 
 # ... What
 
-Your eyes don't deceive you. This repository has exactly 100,0000 contributors!
+Your eyes don't deceive you. This repository has exactly 100,000 contributors!
 
 Though, you probably see a number close to 99,986 contributors. This is because the rest are represented by 14 icons right above that number. In the case that you see a bit less than 99,986 contributors, I think it's because changing email addresses can cause the exact number to fluctuate.
 
