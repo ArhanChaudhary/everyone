@@ -12,7 +12,7 @@ Though, you probably see a number close to 99,986 contributors. This is because 
 
 # ... How
 
-As you could probably guess, 100,000 people didn't actually contribute to this repository. I accidentally discovered some time ago that if you co-author a GitHub user on a commit, they're unconditionally and permanently added as a contributor to the repository. I wrote a script that utilizes the GitHub GraphQL API to collect and co-author GitHub users on commits on this repository.
+As you could probably guess, 100,000 people didn't actually contribute to this repository. I accidentally discovered some time ago that if you co-author a GitHub user on a commit, they're unconditionally and permanently added as a contributor to the repository. I wrote a script that utilizes the GitHub GraphQL API to collect and co-author GitHub users in commits on this repository.
 
 Check out `everyone.sh` and `index.mjs`. Make sure you read their docstrings and understand the implications of personal use.
 

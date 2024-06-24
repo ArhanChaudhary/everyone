@@ -62,6 +62,7 @@ do
     fi
     FIRST_ITERATION=0
     printf '👀\n\n%s' $(cat $i) | git commit --allow-empty -F -
+    git push
 done
 
 rm split*
