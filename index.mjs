@@ -150,8 +150,9 @@ async function* coAuthorsFromUsersIterator(usersBatch, seenUsers) {
       continue;
     }
     for (let [i, jsonWithEmail] of Object.entries(jsonWithEmails)) {
+      // ?.history is needed to not crash on corrupted repositories
       let email =
-        jsonWithEmail.repositories.nodes[0]?.defaultBranchRef?.target.history
+        jsonWithEmail.repositories.nodes[0]?.defaultBranchRef?.target?.history
           .nodes[0]?.author.email;
       // the query label was prefixed by "_"
       i = i.substring(1);
