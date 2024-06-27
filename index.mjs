@@ -1,11 +1,10 @@
 /**
  * Copyright 2024, Arhan Chaudhary, All rights reserved.
  *
- * Hey there, curious reader
- *
- * This program is *solely* meant for educational purposes. I love making
- * my software public, but I kindly request for you to be mindful and avoid
- * misuse relating to email harvesting/spamming.
+ * This program is *solely* intended for personal use in case you wanted
+ * to boost your own repository's contributor count. I love making software
+ * public, but I kindly request for you to be mindful and avoid misuse relating
+ * to email harvesting/spamming.
  *
  * Please familiarize yourself with GitHub's Acceptable Use Policies on:
  *
@@ -19,10 +18,8 @@
  *
  * https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement
  *
- * Thank you! You may toggle and adjust the following settings for your usage:
+ * Thank you!
  */
-
-
 
 // I don't account for duplicate co-authors nor do I validate them so
 // you should overestimate this value by a factor of around 1.5
@@ -49,7 +46,7 @@ const BATCH_USER_COUNT = 85;
 if (Number.isNaN(CO_AUTHOR_COUNT)) {
   console.error(
     `Invalid co_author_count argument: ${process.argv[2]}
-Usage: index.mjs --co_author_count=[N]`
+Usage: index.mjs --co-author-count=[N]`
   );
   process.exit(1);
 }
