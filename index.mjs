@@ -28,20 +28,17 @@ const CO_AUTHOR_COUNT = parseInt(
     .find((arg) => arg.startsWith("--co-author-count="))
     ?.substring(18)
 );
-
-// filter only for users with noreply emails
-// please think twice before setting this to false
-const ONLY_NOREPLY_EMAILS = true;
-// around how many co authors to get for each search user, set to Infinity to
-// search every follower
-const SEARCH_USER_FOLLOWERS_DEPTH = Math.ceil(Math.sqrt(CO_AUTHOR_COUNT));
 // how many followers to start searching from in descending order, set to
 // Infinity to start from most followed users
 const INITIAL_MAX_FOLLOWERS = Infinity;
 // how many users to process in a single graphql query, 85 is around optimal
 const BATCH_USER_COUNT = 85;
-
-
+// how many concurrent email queries to make, any more than this gets secondary
+// rate limited hard
+const CONCURRENCY_COUNT = 3;
+// around how many co authors to get for each search user, set to Infinity to
+// search every follower
+const SEARCH_USER_FOLLOWERS_DEPTH = Math.ceil(Math.sqrt(CO_AUTHOR_COUNT));
 
 if (Number.isNaN(CO_AUTHOR_COUNT)) {
   console.error(
@@ -96,13 +93,19 @@ function filterInPlace(array, predicate) {
   }
 }
 
-function emailsFromUsersQuery(users) {
+function emailsFromUsersQuery(users, batchIndex) {
   return stripIgnoredCharacters(`
     {
       ${users
+        .slice(
+          batchIndex * BATCH_USER_COUNT,
+          (batchIndex + 1) * BATCH_USER_COUNT
+        )
         .map(
           ({ login, id }, index) =>
-            `_${index}: user(login: "${login}") {
+            `_${
+              index + batchIndex * BATCH_USER_COUNT
+            }: user(login: "${login}") {
               repositories(first: 1, isFork: false, orderBy: {field: STARGAZERS, direction: DESC}) {
                 nodes {
                   defaultBranchRef {
@@ -128,41 +131,38 @@ function emailsFromUsersQuery(users) {
 }
 
 async function* coAuthorsFromUsersIterator(usersBatch) {
-  let emails;
-  let query = emailsFromUsersQuery(usersBatch.slice(0, BATCH_USER_COUNT));
-  try {
-    emails = await octokit.graphql(query);
-  } catch (e) {
-    console.error(
-      `[ERROR] Error deriving emails for query ${query}: ${e.toString()}`
-    );
-    usersBatch.fill(null, 0, BATCH_USER_COUNT);
-    return;
+  let jsonWithEmailsPromises = [];
+  for (let i = 0; i < CONCURRENCY_COUNT; i++) {
+    let query = emailsFromUsersQuery(usersBatch, i);
+    let jsonWithEmailPromise = octokit
+      .graphql(query)
+      .then((jsonWithEmails) => jsonWithEmails || Promise.reject())
+      .catch((e) => {
+        console.error(
+          `[ERROR] Error deriving emails for query ${query}: ${e.toString()}`
+        );
+        usersBatch.fill(null, i * BATCH_USER_COUNT, (i + 1) * BATCH_USER_COUNT);
+      });
+    jsonWithEmailsPromises.push(jsonWithEmailPromise);
   }
-  // happened one time for some strange reason
-  if (!emails) {
-    console.warn(
-      `[WARNING] Emails is unexpectedly ${emails} from query ${query}`
-    );
-    usersBatch.fill(null, 0, BATCH_USER_COUNT);
-    return;
-  }
-
-  for (let [i, jsonWithEmail] of Object.entries(emails)) {
-    let email =
-      jsonWithEmail.repositories.nodes[0]?.defaultBranchRef?.target.history
-        .nodes[0]?.author.email;
-    i = i.substring(1);
-    // null indicates user was processed and should be removed from the batch
-    if (
-      email &&
-      (!ONLY_NOREPLY_EMAILS || email.endsWith("@users.noreply.github.com"))
-    ) {
-      let user = usersBatch[i];
-      usersBatch[i] = null;
-      yield `Co-authored-by: ${user.login} <${email}>`;
-    } else {
-      usersBatch[i] = null;
+  for (let jsonWithEmails of await Promise.all(jsonWithEmailsPromises)) {
+    if (!jsonWithEmails) {
+      // was caught
+      continue;
+    }
+    for (let [i, jsonWithEmail] of Object.entries(jsonWithEmails)) {
+      let email =
+        jsonWithEmail.repositories.nodes[0]?.defaultBranchRef?.target.history
+          .nodes[0]?.author.email;
+      i = i.substring(1);
+      // null indicates user was processed and should be removed from the batch
+      if (email?.endsWith("@users.noreply.github.com")) {
+        let user = usersBatch[i];
+        usersBatch[i] = null;
+        yield `Co-authored-by: ${user.login} <${email}>`;
+      } else {
+        usersBatch[i] = null;
+      }
     }
   }
 }
@@ -195,15 +195,15 @@ async function* followerCoAuthorsIterator(rootUser, usersBatch) {
   let followerCoAuthorCount = -usersBatch.length;
   while (followerCoAuthorCount < SEARCH_USER_FOLLOWERS_DEPTH) {
     // if false, one batch wasn't enough; keep batching the group of users
-    if (usersBatch.length < BATCH_USER_COUNT) {
+    if (usersBatch.length < BATCH_USER_COUNT * CONCURRENCY_COUNT) {
       try {
         for await (let jsonWithFollowers of rootUserFollowersIterator) {
           usersBatch.push(...jsonWithFollowers.user.followers.nodes);
-          if (usersBatch.length >= BATCH_USER_COUNT) {
+          if (usersBatch.length >= BATCH_USER_COUNT * CONCURRENCY_COUNT) {
             break;
           }
         }
-        if (usersBatch.length < BATCH_USER_COUNT) {
+        if (usersBatch.length < BATCH_USER_COUNT * CONCURRENCY_COUNT) {
           console.warn(
             `[WARNING] Only processed ${usersBatch.length}/${SEARCH_USER_FOLLOWERS_DEPTH} followers from user ${rootUser.login}`
           );
