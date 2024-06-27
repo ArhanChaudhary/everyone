@@ -1,10 +1,9 @@
 /**
  * Copyright 2024, Arhan Chaudhary, All rights reserved.
  *
- * This program is *solely* intended for personal use in case you wanted
- * to boost your own repository's contributor count. I love making software
- * public, but I kindly request for you to be mindful and avoid misuse relating
- * to email harvesting/spamming.
+ * This program is *solely* intended for educational purposes. I love making
+ * software public, but I kindly request for you to be mindful and avoid misuse
+ * relating to email harvesting/spamming.
  *
  * Please familiarize yourself with GitHub's Acceptable Use Policies on:
  *
@@ -21,8 +20,7 @@
  * Thank you!
  */
 
-// I don't account for duplicate co-authors nor do I validate them so
-// you should overestimate this value by a factor of around 1.5
+// Note that not every co-author may be valid
 const CO_AUTHOR_COUNT = parseInt(
   process.argv
     .find((arg) => arg.startsWith("--co-author-count="))
@@ -34,7 +32,7 @@ const INITIAL_MAX_FOLLOWERS = Infinity;
 // how many users to process in a single graphql query, 85 is around optimal
 const BATCH_USER_COUNT = 85;
 // how many concurrent email queries to make, any more than this gets secondary
-// rate limited hard
+// rate limited a lot and has diminishing returns
 const CONCURRENCY_COUNT = 3;
 // around how many co authors to get for each search user, set to Infinity to
 // search every follower
@@ -130,7 +128,7 @@ function emailsFromUsersQuery(users, batchIndex) {
   `);
 }
 
-async function* coAuthorsFromUsersIterator(usersBatch) {
+async function* coAuthorsFromUsersIterator(usersBatch, seenUsers) {
   let jsonWithEmailsPromises = [];
   for (let i = 0; i < CONCURRENCY_COUNT; i++) {
     let query = emailsFromUsersQuery(usersBatch, i);
@@ -145,6 +143,7 @@ async function* coAuthorsFromUsersIterator(usersBatch) {
       });
     jsonWithEmailsPromises.push(jsonWithEmailPromise);
   }
+
   for (let jsonWithEmails of await Promise.all(jsonWithEmailsPromises)) {
     if (!jsonWithEmails) {
       // was caught
@@ -154,11 +153,16 @@ async function* coAuthorsFromUsersIterator(usersBatch) {
       let email =
         jsonWithEmail.repositories.nodes[0]?.defaultBranchRef?.target.history
           .nodes[0]?.author.email;
+      // the query label was prefixed by "_"
       i = i.substring(1);
+      let user = usersBatch[i];
       // null indicates user was processed and should be removed from the batch
-      if (email?.endsWith("@users.noreply.github.com")) {
-        let user = usersBatch[i];
+      if (
+        email?.endsWith("@users.noreply.github.com") &&
+        !seenUsers.has(user.id)
+      ) {
         usersBatch[i] = null;
+        seenUsers.add(user.id);
         yield `Co-authored-by: ${user.login} <${email}>`;
       } else {
         usersBatch[i] = null;
@@ -167,7 +171,7 @@ async function* coAuthorsFromUsersIterator(usersBatch) {
   }
 }
 
-async function* followerCoAuthorsIterator(rootUser, usersBatch) {
+async function* followerCoAuthorsIterator(rootUser, usersBatch, seenUsers) {
   let rootUserFollowersIterator = octokit.graphql.paginate.iterator(
     stripIgnoredCharacters(`
       query($cursor: String) {
@@ -218,7 +222,10 @@ async function* followerCoAuthorsIterator(rootUser, usersBatch) {
         return;
       }
     }
-    for await (let coAuthor of coAuthorsFromUsersIterator(usersBatch)) {
+    for await (let coAuthor of coAuthorsFromUsersIterator(
+      usersBatch,
+      seenUsers
+    )) {
       yield coAuthor;
       followerCoAuthorCount++;
     }
@@ -267,6 +274,7 @@ async function* coAuthorsIterator() {
   // I know... but this needs to be sequential or else github complains
   // about secondary rate limits
   let usersBatch = [];
+  let seenUsers = new Set();
   let maxFollowers = INITIAL_MAX_FOLLOWERS;
   let minFollowersLogin;
   while (true) {
@@ -279,7 +287,8 @@ async function* coAuthorsIterator() {
       minFollowersLogin = searchUser.login;
       for await (let coAuthor of followerCoAuthorsIterator(
         searchUser,
-        usersBatch
+        usersBatch,
+        seenUsers
       )) {
         yield coAuthor;
       }
