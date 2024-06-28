@@ -53,9 +53,9 @@ read
 echo "Starting postprocessing, please wait for a while..."
 # we must batch contributors 5000 at a time and also sleep for two minutes
 # or else github refuses to process them
-cat results.txt | awk '!seen[$0]++' | split -l 5000 -a 10 - split
+split -l 5000 -a 10 results.txt split_
 FIRST_ITERATION=1
-for i in split*
+for i in split_*
 do
     if [ $FIRST_ITERATION -eq 0 ]; then
         sleep 120
@@ -65,5 +65,5 @@ do
     git push
 done
 
-rm split*
+rm split_*
 echo "Co-authors successfully processed!"

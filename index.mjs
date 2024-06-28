@@ -36,7 +36,7 @@ const BATCH_USER_COUNT = 85;
 const CONCURRENCY_COUNT = 3;
 // around how many co authors to get for each search user, set to Infinity to
 // search every follower
-const SEARCH_USER_FOLLOWERS_DEPTH = Math.ceil(Math.sqrt(CO_AUTHOR_COUNT));
+const SEARCH_USER_FOLLOWERS_DEPTH = 500;
 
 if (Number.isNaN(CO_AUTHOR_COUNT)) {
   console.error(
