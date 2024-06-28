@@ -4,6 +4,10 @@
 
 Please navigate to the [ethicality and legality](#ethicality-and-legality) section if you have concerns about data privacy regarding this repository.
 
+# Detailed Write-up
+
+Check out my detailed write-up about this project on my blog: https://arhan.sh/blog/my-github-repository-has-100000-contributors/
+
 # ... What
 
 Your eyes don't deceive you. This repository has exactly 100,000 contributors!
