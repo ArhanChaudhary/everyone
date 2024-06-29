@@ -1,14 +1,11 @@
 #!/bin/bash
 
-
-
+#
 # Copyright 2024, Arhan Chaudhary, All rights reserved.
 #
-# Hey there, curious reader
-#
-# This program is *solely* meant for educational purposes. I love making
-# my software public, but I kindly request for you to be mindful and avoid
-# misuse relating to email harvesting/spamming.
+# This program is *solely* intended for educational purposes. I love making
+# software public, but I kindly request for you to be mindful and avoid misuse
+# relating to email harvesting/spamming.
 #
 # Please familiarize yourself with GitHub's Acceptable Use Policies on:
 #
@@ -23,8 +20,7 @@
 # https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement
 #
 # Thank you!
-
-
+#
 
 if [ -z "$GH_PAT" ]; then
     echo "You need a GitHub Personal Access Token to run this script"

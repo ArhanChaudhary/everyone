@@ -100,10 +100,8 @@ function emailsFromUsersQuery(users, batchIndex) {
           (batchIndex + 1) * BATCH_USER_COUNT
         )
         .map(
-          ({ login, id }, index) =>
-            `_${
-              index + batchIndex * BATCH_USER_COUNT
-            }: user(login: "${login}") {
+          ({ login, id }, index) => `
+            _${index + batchIndex * BATCH_USER_COUNT}: user(login: "${login}") {
               repositories(first: 1, isFork: false, orderBy: {field: STARGAZERS, direction: DESC}) {
                 nodes {
                   defaultBranchRef {
@@ -121,7 +119,8 @@ function emailsFromUsersQuery(users, batchIndex) {
                   }
                 }
               }
-            }`
+            }
+          `
         )
         .join("\n")}
     }
