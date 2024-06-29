@@ -53,7 +53,7 @@ read
 echo "Starting postprocessing, please wait for a while..."
 # we must batch contributors 5000 at a time and also sleep for two minutes
 # or else github refuses to process them
-split -l 5000 -a 10 results.txt split_
+split -l 5000 -a 5 results.txt split_
 FIRST_ITERATION=1
 for i in split_*
 do
@@ -61,7 +61,7 @@ do
         sleep 120
     fi
     FIRST_ITERATION=0
-    printf '👀\n\n%s' $(cat $i) | git commit --allow-empty -F -
+    echo -e "👀\n\n$(cat $i)" | git commit --allow-empty -F -
     git push
 done
 
