@@ -14,7 +14,7 @@ Check out my detailed write-up about this project on my blog: https://arhan.sh/b
 
 Your eyes don't deceive you. This repository has exactly 100,000 contributors! **If you are on GitHub mobile, the number may not appear. You have to view this repository through GitHub's web UI.**
 
-Though, you probably see a number close to 99,986 contributors. This is because the rest are represented by 14 icons right above that number. In the case that you see a bit less than 99,986 contributors, I think it's because changing email addresses can cause the exact number to fluctuate.
+Though, you probably see a number less than 100,000. I think it's because changing email addresses can cause the exact number to fluctuate.
 
 # ... How
 
