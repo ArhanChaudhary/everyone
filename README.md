@@ -1,5 +1,7 @@
 <!-- cspell:ignore ethicality noreply arhan docstrings -->
 
+<img width="332" height="200" alt="100000-contributors" src="https://github.com/user-attachments/assets/b2e687b7-1dce-49e8-964e-99109428dc28" />
+
 # To concerned readers, and GitHub staff
 
 Please navigate to the [ethicality and legality](#ethicality-and-legality) section if you have concerns about data privacy regarding this repository.
