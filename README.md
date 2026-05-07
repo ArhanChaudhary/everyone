@@ -20,7 +20,7 @@ Check out `everyone.sh` and `index.mjs`. Make sure you read their docstrings and
 
 [Why not? Why not? Why not?](https://github.com/mame/quine-relay/issues/11)
 
-# Ethicality and legality
+# Notice
 
 The primary reason for the inclusion of this section is the fact that you need to include a GitHub user's name **and email address** in a commit message for them to be listed as a contributor for this repository.
 
